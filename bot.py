@@ -5,7 +5,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 # ====== Вставь сюда свои данные ======
-API_TOKEN = "8251456272:AAHMkjINO0KHcqWDhnpAe_Vz-nbm8qMwFXc"       # токен от BotFather
+API_TOKEN = "8251456272:AAGF3yOA7uCDgUYcONv1EbkUFakX6R1CLMk"       # токен от BotFather
 ADMIN_ID = 5714186618          # твой Telegram ID
 # ====================================
 
