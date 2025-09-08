@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-BOT_TOKEN = os.getenv("8251456272:AAGF3yOA7uCDgUYcONv1EbkUFakX6R1CLMk")
+BOT_TOKEN = os.getenv("8251456272:AAGF3yOA7uCDgUYc0Nv1EbkUFakX6R1CLMk")
 ADMINS = [5714186618]  # твой ID
 
 DATA_FILE = "data.json"
