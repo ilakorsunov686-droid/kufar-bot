@@ -1,119 +1,84 @@
+import os
+import json
 import asyncio
-import aiohttp
-from aiogram import Bot, Dispatcher
-from aiogram.filters import Command
-from aiogram.types import Message
+import requests
+from bs4 import BeautifulSoup
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# ====== Вставь сюда свои данные ======
-API_TOKEN = "8251456272:AAGF3yOA7uCDgUYcONv1EbkUFakX6R1CLMk"       # токен от BotFather
-ADMIN_ID = 5714186618          # твой Telegram ID
-# ====================================
+BOT_TOKEN = os.getenv("8251456272:AAGF3yOA7uCDgUYcONv1EbkUFakX6R1CLMk")
+ADMINS = [5714186618]  # твой ID
 
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher()
+DATA_FILE = "data.json"
 
-SUBSCRIBERS_FILE = "subscribers.txt"
-
-def load_subscribers():
+def load_data():
     try:
-        with open(SUBSCRIBERS_FILE, "r") as f:
-            return set(int(line.strip()) for line in f)
-    except FileNotFoundError:
-        return set()
-
-def save_subscribers(subs):
-    with open(SUBSCRIBERS_FILE, "w") as f:
-        for user_id in subs:
-            f.write(str(user_id) + "\n")
-
-subscribers = load_subscribers()
-sent_ads = set()
-
-# ====== Kufar API ======
-async def fetch_ads(session, query="iphone", city="Минск", price_from=100, price_to=1000):
-    url = "https://api.kufar.by/search-api/v1/search/rendered-paginated"
-    params = {
-        "cat": "2010",
-        "q": query,
-        "size": 10,
-        "prc": f"{price_from}-{price_to}",
-        "rgn": "1",
-        "sort": "lst.d",
-    }
-    async with session.get(url, params=params) as resp:
-        return await resp.json()
-
-async def check_new_ads():
-    async with aiohttp.ClientSession() as session:
-        ads = await fetch_ads(session)
-        if "ads" not in ads:
-            return
-        for ad in ads["ads"]:
-            ad_id = ad.get("ad_id")
-            title = ad.get("subject")
-            price = ad.get("price", {}).get("amount")
-            link = f"https://www.kufar.by/l/{ad_id}"
-
-            if ad_id not in sent_ads:
-                sent_ads.add(ad_id)
-                text = f"📱 {title}\n💰 {price} BYN\n🔗 {link}"
-                await send_to_all(text)
-
-# ====== Рассылка ======
-async def send_to_all(text):
-    for user_id in subscribers.copy():
-        try:
-            await bot.send_message(user_id, text)
-        except Exception as e:
-            print(f"Не удалось отправить {user_id}: {e}")
-
-# ====== Админ-команды ======
-@dp.message(Command("add"))
-async def add_subscriber(message: Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    try:
-        user_id = int(message.text.split()[1])
-        subscribers.add(user_id)
-        save_subscribers(subscribers)
-        await message.answer(f"✅ Пользователь {user_id} добавлен.")
+        with open(DATA_FILE, "r") as f:
+            return json.load(f)
     except:
-        await message.answer("⚠️ Используй: /add <user_id>")
+        return {"users": {}, "sent_ads": []}
 
-@dp.message(Command("remove"))
-async def remove_subscriber(message: Message):
-    if message.from_user.id != ADMIN_ID:
-        return
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f)
+
+data = load_data()
+
+def get_new_ads(filter_params):
+    url = f"https://www.kufar.by/l?query={filter_params.get('query','')}"
     try:
-        user_id = int(message.text.split()[1])
-        if user_id in subscribers:
-            subscribers.remove(user_id)
-            save_subscribers(subscribers)
-            await message.answer(f"❌ Пользователь {user_id} удалён.")
-        else:
-            await message.answer("Пользователь не найден.")
-    except:
-        await message.answer("⚠️ Используй: /remove <user_id>")
+        response = requests.get(url)
+    except Exception as e:
+        print("Ошибка запроса:", e)
+        return []
+    soup = BeautifulSoup(response.text, "html.parser")
+    ads = []
+    for item in soup.find_all("div", class_="listingItem"):
+        title_tag = item.find("h3")
+        link_tag = item.find("a")
+        if not title_tag or not link_tag:
+            continue
+        full_link = f"https://www.kufar.by{link_tag.get('href','')}"
+        if full_link not in data["sent_ads"]:
+            ads.append(full_link)
+            data["sent_ads"].append(full_link)
+    # Ограничиваем размер sent_ads
+    data["sent_ads"] = data["sent_ads"][-1000:]
+    save_data(data)
+    return ads
 
-@dp.message(Command("list"))
-async def list_subscribers(message: Message):
-    if message.from_user.id != ADMIN_ID:
+async def send_ads(app):
+    for user_id, filters in data["users"].items():
+        ads = get_new_ads(filters)
+        for ad in ads:
+            try:
+                await app.bot.send_message(chat_id=int(user_id), text=ad)
+            except:
+                continue
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Привет! Используй /set_filter для настройки фильтров.")
+
+async def set_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if len(args) < 1:
+        await update.message.reply_text("Пример: /set_filter iPhone 14")
         return
-    text = "📋 Подписчики:\n" + "\n".join(str(uid) for uid in subscribers) if subscribers else "Список пуст."
-    await message.answer(text)
-
-# ====== Фоновый цикл проверки ======
-async def background_worker():
-    while True:
-        try:
-            await check_new_ads()
-        except Exception as e:
-            print("Ошибка:", e)
-        await asyncio.sleep(60)
+    query = " ".join(args)
+    data["users"][str(update.effective_chat.id)] = {"query": query}
+    save_data(data)
+    await update.message.reply_text(f"Фильтр установлен: {query}")
 
 async def main():
-    asyncio.create_task(background_worker())
-    await dp.start_polling(bot)
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("set_filter", set_filter))
+    asyncio.create_task(run_scheduler(app))
+    await app.run_polling()
 
-if __name__ == "__main__":
-    asyncio.run(main())
+async def run_scheduler(app):
+    while True:
+        await send_ads(app)
+        await asyncio.sleep(300)
+
+asyncio.run(main())
