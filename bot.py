@@ -1,5 +1,4 @@
 import json
-import asyncio
 import requests
 from bs4 import BeautifulSoup
 from telegram import Update
@@ -10,7 +9,7 @@ BOT_TOKEN = "8251456272:AAGF3yOA7uCDgUYc0Nv1EbkUFakX6R1CLMk"  # твой ток�
 ADMINS = [123456789]  # замени на свой Telegram ID
 DATA_FILE = "data.json"
 
-# ===== Загрузка/сохранение данных =====
+# ===== Загрузка / сохранение данных =====
 def load_data():
     try:
         with open(DATA_FILE, "r") as f:
@@ -24,49 +23,48 @@ def save_data(data):
 
 data = load_data()
 
-# ===== Парсинг Куфар =====
+# ===== Парсинг Kufar =====
 def get_new_ads(filter_params):
     url = f"https://www.kufar.by/l?query={filter_params.get('query','')}"
     try:
         response = requests.get(url)
-    except Exception as e:
-        print("Ошибка запроса:", e)
+    except:
         return []
     soup = BeautifulSoup(response.text, "html.parser")
     ads = []
     for item in soup.find_all("div", class_="listingItem"):
-        title_tag = item.find("h3")
         link_tag = item.find("a")
-        if not title_tag or not link_tag:
+        if not link_tag:
             continue
         full_link = f"https://www.kufar.by{link_tag.get('href','')}"
         if full_link not in data["sent_ads"]:
             ads.append(full_link)
             data["sent_ads"].append(full_link)
+    # ограничиваем размер sent_ads
     data["sent_ads"] = data["sent_ads"][-1000:]
     save_data(data)
     return ads
 
-# ===== Отправка объявлений =====
-async def send_ads(app):
+# ===== Планировщик объявлений =====
+async def send_ads(context: ContextTypes.DEFAULT_TYPE):
     for user_id, filters in data["users"].items():
         ads = get_new_ads(filters)
         for ad in ads:
             try:
-                await app.bot.send_message(chat_id=int(user_id), text=ad)
-            except Exception as e:
-                print(f"Не удалось отправить пользователю {user_id}: {e}")
+                await context.bot.send_message(chat_id=int(user_id), text=ad)
+            except:
+                continue
 
 # ===== Команды бота =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Привет! Я бот для отслеживания новых объявлений на Куфар.\n"
+        "Привет! Я бот для отслеживания новых объявлений на Kufar.\n"
         "Настрой фильтры через /set_filter (например: /set_filter iPhone 14)."
     )
 
 async def set_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
-    if len(args) < 1:
+    if not args:
         await update.message.reply_text("Пример: /set_filter iPhone 14")
         return
     query = " ".join(args)
@@ -96,28 +94,21 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Пользователь не найден.")
 
-# ===== Планировщик =====
-async def scheduler(app):
-    while True:
-        await send_ads(app)
-        await asyncio.sleep(300)  # каждые 5 минут
-
-# ===== Основная функция =====
+# ===== Создание и запуск бота =====
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    # команды
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("set_filter", set_filter))
     app.add_handler(CommandHandler("add_user", add_user))
     app.add_handler(CommandHandler("remove_user", remove_user))
 
-    # Запуск планировщика и polling
-    async def runner():
-        asyncio.create_task(scheduler(app))
-        await app.run_polling()
+    # JobQueue — планировщик каждые 5 минут
+    app.job_queue.run_repeating(send_ads, interval=300, first=0)
 
-    asyncio.run(runner())
+    # запуск бота (на Render это безопасно)
+    app.run_polling()
 
-# ===== Запуск =====
 if __name__ == "__main__":
     main()
