@@ -5,7 +5,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 # ===== Настройки =====
-BOT_TOKEN = "8251456272:AAGF3yOA7uCDgUYc0Nv1EbkUFakX6R1CLMk"  # твой токен
+BOT_TOKEN = "8251456272:AAGF3yOA7uCDgUYc0Nv1EbkUFakX6R1CLMk"
 ADMINS = [123456789]  # замени на свой Telegram ID
 DATA_FILE = "data.json"
 
@@ -40,7 +40,6 @@ def get_new_ads(filter_params):
         if full_link not in data["sent_ads"]:
             ads.append(full_link)
             data["sent_ads"].append(full_link)
-    # ограничиваем размер sent_ads
     data["sent_ads"] = data["sent_ads"][-1000:]
     save_data(data)
     return ads
@@ -107,7 +106,7 @@ def main():
     # JobQueue — планировщик каждые 5 минут
     app.job_queue.run_repeating(send_ads, interval=300, first=0)
 
-    # запуск бота (на Render это безопасно)
+    # запуск бота
     app.run_polling()
 
 if __name__ == "__main__":
