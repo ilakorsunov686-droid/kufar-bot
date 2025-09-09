@@ -5,13 +5,12 @@ from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# Твой токен прямо в коде
+# ====== Настройки ======
 BOT_TOKEN = "8251456272:AAGF3yOA7uCDgUYc0Nv1EbkUFakX6R1CLMk"
-ADMINS = [5714186618]  # замени на свой Telegram ID для админ-команд
-
+ADMINS = [123456789]  # замени на свой Telegram ID
 DATA_FILE = "data.json"
 
-# Загрузка данных
+# ====== Загрузка / сохранение данных ======
 def load_data():
     try:
         with open(DATA_FILE, "r") as f:
@@ -19,14 +18,13 @@ def load_data():
     except:
         return {"users": {}, "sent_ads": []}
 
-# Сохранение данных
 def save_data(data):
     with open(DATA_FILE, "w") as f:
         json.dump(data, f)
 
 data = load_data()
 
-# Парсинг Куфар (пока без фильтров)
+# ====== Парсинг Куфар ======
 def get_new_ads(filter_params):
     url = f"https://www.kufar.by/l?query={filter_params.get('query','')}"
     try:
@@ -50,24 +48,24 @@ def get_new_ads(filter_params):
     save_data(data)
     return ads
 
-# Отправка объявлений пользователям
+# ====== Отправка объявлений ======
 async def send_ads(app):
     for user_id, filters in data["users"].items():
         ads = get_new_ads(filters)
         for ad in ads:
             try:
                 await app.bot.send_message(chat_id=int(user_id), text=ad)
-            except:
+            except Exception as e:
+                print(f"Не удалось отправить пользователю {user_id}: {e}")
                 continue
 
-# Команда /start
+# ====== Команды бота ======
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Привет! Я бот для отслеживания новых объявлений на Куфар.\n"
         "Настрой свои фильтры через /set_filter (например: /set_filter iPhone 14)."
     )
 
-# Команда /set_filter
 async def set_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     if len(args) < 1:
@@ -78,7 +76,7 @@ async def set_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_data(data)
     await update.message.reply_text(f"Фильтр установлен: {query}")
 
-# Админ команды (пример)
+# Админ команды
 async def add_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id not in ADMINS:
         await update.message.reply_text("Нет доступа")
@@ -100,23 +98,29 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Пользователь не найден.")
 
-# Планировщик проверок
+# ====== Планировщик ======
 async def run_scheduler(app):
     while True:
         await send_ads(app)
         await asyncio.sleep(300)  # каждые 5 минут
 
-# Основная функция
+# ====== Основная функция ======
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-    
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("set_filter", set_filter))
     app.add_handler(CommandHandler("add_user", add_user))
     app.add_handler(CommandHandler("remove_user", remove_user))
-    
+
     asyncio.create_task(run_scheduler(app))
     await app.run_polling()
 
-# Запуск бота
-asyncio.run(main())
+# ====== Запуск ======
+if __name__ == "__main__":
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    loop.run_until_complete(main())
