@@ -6,7 +6,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 # ====== Настройки ======
-BOT_TOKEN = "8251456272:AAGF3yOA7uCDgUYc0Nv1EbkUFakX6R1CLMk"
+BOT_TOKEN = "8251456272:AAGF3yOA7uCDgUYc0Nv1EbkUFakX6R1CLMk"  # твой токен
 ADMINS = [123456789]  # замени на свой Telegram ID
 DATA_FILE = "data.json"
 
@@ -76,7 +76,7 @@ async def set_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_data(data)
     await update.message.reply_text(f"Фильтр установлен: {query}")
 
-# Админ команды
+# ====== Админ команды ======
 async def add_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id not in ADMINS:
         await update.message.reply_text("Нет доступа")
@@ -106,7 +106,7 @@ async def run_scheduler(app):
 
 # ====== Основная функция ======
 async def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app = await ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("set_filter", set_filter))
