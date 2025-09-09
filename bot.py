@@ -106,8 +106,8 @@ async def run_scheduler(app):
 
 # ====== Основная функция ======
 async def main():
-    app = await ApplicationBuilder().token(BOT_TOKEN).build()
-
+    app = ApplicationBuilder().token(BOT_TOKEN).build()  # <-- просто build()
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("set_filter", set_filter))
     app.add_handler(CommandHandler("add_user", add_user))
@@ -118,9 +118,5 @@ async def main():
 
 # ====== Запуск ======
 if __name__ == "__main__":
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+    loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
