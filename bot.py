@@ -1,4 +1,3 @@
-import os
 import json
 import asyncio
 import requests
@@ -6,11 +5,13 @@ from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-BOT_TOKEN = os.getenv("8251456272:AAGF3yOA7uCDgUYc0Nv1EbkUFakX6R1CLMk")
-ADMINS = [5714186618]  # твой ID
+# Твой токен прямо в коде
+BOT_TOKEN = "8251456272:AAGF3yOA7uCDgUYc0Nv1EbkUFakX6R1CLMk"
+ADMINS = [5714186618]  # замени на свой Telegram ID для админ-команд
 
 DATA_FILE = "data.json"
 
+# Загрузка данных
 def load_data():
     try:
         with open(DATA_FILE, "r") as f:
@@ -18,12 +19,14 @@ def load_data():
     except:
         return {"users": {}, "sent_ads": []}
 
+# Сохранение данных
 def save_data(data):
     with open(DATA_FILE, "w") as f:
         json.dump(data, f)
 
 data = load_data()
 
+# Парсинг Куфар (пока без фильтров)
 def get_new_ads(filter_params):
     url = f"https://www.kufar.by/l?query={filter_params.get('query','')}"
     try:
@@ -47,6 +50,7 @@ def get_new_ads(filter_params):
     save_data(data)
     return ads
 
+# Отправка объявлений пользователям
 async def send_ads(app):
     for user_id, filters in data["users"].items():
         ads = get_new_ads(filters)
@@ -56,9 +60,14 @@ async def send_ads(app):
             except:
                 continue
 
+# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет! Используй /set_filter для настройки фильтров.")
+    await update.message.reply_text(
+        "Привет! Я бот для отслеживания новых объявлений на Куфар.\n"
+        "Настрой свои фильтры через /set_filter (например: /set_filter iPhone 14)."
+    )
 
+# Команда /set_filter
 async def set_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     if len(args) < 1:
@@ -69,16 +78,45 @@ async def set_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_data(data)
     await update.message.reply_text(f"Фильтр установлен: {query}")
 
-async def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("set_filter", set_filter))
-    asyncio.create_task(run_scheduler(app))
-    await app.run_polling()
+# Админ команды (пример)
+async def add_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.from_user.id not in ADMINS:
+        await update.message.reply_text("Нет доступа")
+        return
+    new_user = context.args[0]
+    data["users"][new_user] = {"query": ""}
+    save_data(data)
+    await update.message.reply_text(f"Пользователь {new_user} добавлен.")
 
+async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.from_user.id not in ADMINS:
+        await update.message.reply_text("Нет доступа")
+        return
+    remove_user = context.args[0]
+    if remove_user in data["users"]:
+        del data["users"][remove_user]
+        save_data(data)
+        await update.message.reply_text(f"Пользователь {remove_user} удален.")
+    else:
+        await update.message.reply_text("Пользователь не найден.")
+
+# Планировщик проверок
 async def run_scheduler(app):
     while True:
         await send_ads(app)
-        await asyncio.sleep(300)
+        await asyncio.sleep(300)  # каждые 5 минут
 
+# Основная функция
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("set_filter", set_filter))
+    app.add_handler(CommandHandler("add_user", add_user))
+    app.add_handler(CommandHandler("remove_user", remove_user))
+    
+    asyncio.create_task(run_scheduler(app))
+    await app.run_polling()
+
+# Запуск бота
 asyncio.run(main())
